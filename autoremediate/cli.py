@@ -104,6 +104,7 @@ def fix(
     replay: bool = typer.Option(False, "--replay", help="Replay from saved recording without calling LLM"),
     apply: bool = typer.Option(False, "--apply", help="Apply patch to repo if verified"),
     pr: bool = typer.Option(False, "--pr", help="Apply patch and create a git branch and pull request"),
+    telegram: bool = typer.Option(False, "--telegram", help="Send approval request with inline buttons to Telegram"),
 ):
     """Diagnose, patch, and verify a captured task failure."""
     repo_root = Path.cwd().resolve()
@@ -317,12 +318,64 @@ def fix(
                     console.print(f"  git push -u origin {branch_name}")
                     console.print(f"  gh pr create --title 'fix: {task_name} (auto-remediate)'")
 
+        # Dispatch to Telegram if requested
+        if telegram:
+            from autoremediate.telegram import send_approval_request
+            sent = send_approval_request(failure=failure, final=final, diff=verify_result.diff)
+            if sent:
+                console.print("[bold green]Approval request dispatched to Telegram! Check your phone.[/bold green]")
+            else:
+                console.print("[yellow]Could not send Telegram message. Check TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env[/yellow]")
+
         raise typer.Exit(code=0)
     else:
         # Non-verified result banner
         banner_content = f"[bold red]{verify_result.status}[/bold red]: {verify_result.reason}"
         console.print(Panel(banner_content, border_style="red"))
         raise typer.Exit(code=1)
+
+
+@app.command(name="telegram-notify")
+def telegram_notify(
+    failure_id: str = typer.Argument(..., help="The failure ID to send for Telegram approval"),
+):
+    """Send an approval request to Telegram for an existing verified failure."""
+    from autoremediate.telegram import send_approval_request
+    try:
+        failure = load_failure(failure_id)
+    except Exception as exc:
+        console.print(f"[bold red]Error loading failure: {exc}[/bold red]")
+        raise typer.Exit(code=2)
+
+    rec_dir = Path(os.getenv("RECORDINGS_DIR", "recordings"))
+    rec_file = rec_dir / f"run_{failure_id}.json"
+    if not rec_file.exists():
+        console.print(f"[bold red]Error: No recording found at {rec_file}. Run 'autoremediate fix {failure_id}' first.[/bold red]")
+        raise typer.Exit(code=1)
+
+    rec_data = json.loads(rec_file.read_text(encoding="utf-8"))
+    final = rec_data.get("final", {})
+    diff = rec_data.get("diff", "")
+    ok = send_approval_request(failure=failure, final=final, diff=diff)
+    if ok:
+        console.print(f"[bold green]Approval request for failure #{failure_id} sent to Telegram![/bold green]")
+    else:
+        console.print("[bold red]Failed to send Telegram request. Check TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.[/bold red]")
+        raise typer.Exit(code=1)
+
+
+@app.command(name="telegram-listen")
+def telegram_listen(
+    timeout: int = typer.Option(20, "--timeout", help="Long-polling timeout in seconds"),
+):
+    """Listen for Telegram approval/rejection button clicks and apply approved patches."""
+    from autoremediate.telegram import listen_for_approvals
+    repo_root = Path.cwd().resolve()
+    console.print("[bold cyan]Listening for Telegram approvals... (Press Ctrl+C to stop)[/bold cyan]")
+    try:
+        listen_for_approvals(repo_root=repo_root, poll_timeout=timeout)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Telegram listener stopped.[/yellow]")
 
 
 if __name__ == "__main__":
