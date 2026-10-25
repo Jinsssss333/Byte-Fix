@@ -7,3 +7,4 @@ rich
 openai
 python-dotenv
 pytest
+sentry-sdk
