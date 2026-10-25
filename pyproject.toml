@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autoremediate"
+version = "0.1.0"
+description = "Auto-Remediate: Autonomous Celery crash repair and verification engine"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "celery[redis]",
+    "redis",
+    "typer",
+    "rich",
+    "openai",
+    "python-dotenv",
+    "pytest",
+]
+
+[project.scripts]
+autoremediate = "autoremediate.cli:app"

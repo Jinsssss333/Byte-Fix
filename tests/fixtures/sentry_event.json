@@ -1,0 +1,66 @@
+{
+  "id": "sentry-event-101",
+  "project": 12345,
+  "release": "a1b2c3d",
+  "timestamp": "2026-10-25T11:00:00Z",
+  "transaction": "demo_app.tasks.send_receipt",
+  "tags": [
+    ["task_name", "demo_app.tasks.send_receipt"],
+    ["environment", "production"]
+  ],
+  "contexts": {
+    "celery": {
+      "task_id": "c1f72834-3991-4cf4-912f-981729384729"
+    }
+  },
+  "extra": {
+    "args": [
+      {
+        "id": 42,
+        "customer": {
+          "name": "Asha Rao",
+          "email": null,
+          "password": "supersecretpassword123"
+        },
+        "items": [
+          {"price": 10.0, "qty": 2}
+        ]
+      }
+    ],
+    "kwargs": {}
+  },
+  "exception": {
+    "values": [
+      {
+        "type": "AttributeError",
+        "value": "'NoneType' object has no attribute 'lower'",
+        "stacktrace": {
+          "frames": [
+            {
+              "filename": "celery/app/trace.py",
+              "abs_path": "/usr/local/lib/python3.14/site-packages/celery/app/trace.py",
+              "lineno": 585,
+              "function": "trace_task",
+              "context_line": "R = retval = fun(*args, **kwargs)",
+              "vars": {}
+            },
+            {
+              "filename": "demo_app/tasks.py",
+              "abs_path": "/app/demo_app/tasks.py",
+              "lineno": 11,
+              "function": "send_receipt",
+              "context_line": "email = order[\"customer\"][\"email\"].lower()",
+              "vars": {
+                "order": {
+                  "id": 42,
+                  "customer": {"name": "Asha Rao", "email": null, "password": "supersecretpassword123"},
+                  "items": [{"price": 10.0, "qty": 2}]
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

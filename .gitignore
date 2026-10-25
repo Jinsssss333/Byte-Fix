@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Auto-remediate ignore patterns
+failures/*.json
+recordings/*.json
+!tests/fixtures/*.json
+.venv/

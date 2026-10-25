@@ -1,0 +1,32 @@
+{
+  "id": "2",
+  "timestamp": "2026-10-25T10:20:00Z",
+  "task_name": "demo_app.tasks.generate_invoice",
+  "task_id": "bf8c1874-9ef2-4be7-8149-cfa094d24177",
+  "args": [
+    {
+      "id": 43,
+      "customer": {"name": "Ravi K", "email": "Ravi@Example.com"},
+      "items": [{"price": 7.0, "qty": 3}]
+    }
+  ],
+  "kwargs": {},
+  "exception_type": "TypeError",
+  "exception_message": "Object of type Decimal is not JSON serializable",
+  "traceback": "Traceback (most recent call last):\n  File \"demo_app/tasks.py\", line 22, in generate_invoice\n    return json.dumps(invoice)\nTypeError: Object of type Decimal is not JSON serializable\n",
+  "frames": [
+    {
+      "file": "demo_app/tasks.py",
+      "line": 22,
+      "function": "generate_invoice",
+      "code": "return json.dumps(invoice)",
+      "locals": {
+        "order": "{'id': 43, 'customer': {'name': 'Ravi K', 'email': 'Ravi@Example.com'}, 'items': [{'price': 7.0, 'qty': 3}]}",
+        "subtotal": "Decimal('21.0')",
+        "tax": "Decimal('3.78')",
+        "invoice": "{'order_id': 43, 'subtotal': Decimal('21.0'), 'tax': Decimal('3.78')}"
+      }
+    }
+  ],
+  "git_sha": "0000000"
+}
