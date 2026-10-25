@@ -318,14 +318,25 @@ def fix(
                     console.print(f"  git push -u origin {branch_name}")
                     console.print(f"  gh pr create --title 'fix: {task_name} (auto-remediate)'")
 
-        # Dispatch to Telegram if requested
+        # Dispatch to Telegram if requested and wait inline for human decision
         if telegram:
-            from autoremediate.telegram import send_approval_request
-            sent = send_approval_request(failure=failure, final=final, diff=verify_result.diff)
-            if sent:
-                console.print("[bold green]Approval request dispatched to Telegram! Check your phone.[/bold green]")
-            else:
-                console.print("[yellow]Could not send Telegram message. Check TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env[/yellow]")
+            from autoremediate.telegram import send_and_wait_for_approval
+            console.print("\n[bold cyan]📱 Dispatching approval card to Telegram...[/bold cyan]")
+            console.print("[dim]Tap 'Approve' or 'Reject' on your phone (Press Ctrl+C to skip wait)[/dim]")
+            try:
+                approved = send_and_wait_for_approval(
+                    failure=failure,
+                    final=final,
+                    diff=verify_result.diff,
+                    repo_root=repo_root,
+                    timeout=180,
+                )
+                if approved:
+                    console.print("[bold green]✅ Approved via Telegram! Applied patch to codebase.[/bold green]")
+                else:
+                    console.print("[yellow]Telegram approval was rejected, timed out, or not configured.[/yellow]")
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Skipped waiting for Telegram response.[/yellow]")
 
         raise typer.Exit(code=0)
     else:

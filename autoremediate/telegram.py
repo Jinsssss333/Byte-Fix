@@ -127,6 +127,7 @@ def handle_telegram_callback(
     callback_query: dict[str, Any],
     repo_root: Path,
     bot_token: str,
+    final: dict[str, Any] | None = None,
 ) -> str:
     """Handle approval or rejection callback from Telegram."""
     cb_id = callback_query.get("id")
@@ -141,27 +142,34 @@ def handle_telegram_callback(
     action, _, failure_id = data.partition(":")
 
     if action == "apply":
-        # Load verified recording
-        rec_dir = Path(os.getenv("RECORDINGS_DIR", "recordings"))
-        rec_file = rec_dir / f"run_{failure_id}.json"
+        # Load verified final payload (from memory or recording)
+        patch_final = final
+        if not patch_final:
+            rec_dir = Path(os.getenv("RECORDINGS_DIR", "recordings"))
+            rec_file = rec_dir / f"run_{failure_id}.json"
+            if rec_file.exists():
+                try:
+                    rec_data = json.loads(rec_file.read_text(encoding="utf-8"))
+                    patch_final = rec_data.get("final", {})
+                except Exception:
+                    pass
 
-        if not rec_file.exists():
-            feedback = f"⚠️ Recording run_{failure_id}.json not found."
+        if not patch_final:
+            feedback = f"⚠️ Could not load patch for failure #{failure_id}."
             _call_telegram_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": feedback}, bot_token)
             return feedback
 
         try:
-            rec_data = json.loads(rec_file.read_text(encoding="utf-8"))
-            final = rec_data.get("final", {})
-            applied_files = apply_patch_to_repo(final, repo_root)
+            applied_files = apply_patch_to_repo(patch_final, repo_root)
 
             toast = f"✅ Applied patch to {len(applied_files)} file(s)!"
             _call_telegram_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": toast}, bot_token)
 
             # Update message to show approved state
             files_list = ", ".join(applied_files) or "codebase"
+            orig_text = message.get("text", "")
             updated_text = (
-                f"{message.get('text', '')}\n\n"
+                f"{orig_text}\n\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"✅ <b>APPROVED & APPLIED</b> by human reviewer.\n"
                 f"Files modified: <code>{files_list}</code>"
@@ -186,8 +194,9 @@ def handle_telegram_callback(
         toast = f"❌ Patch for failure #{failure_id} rejected."
         _call_telegram_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": toast}, bot_token)
 
+        orig_text = message.get("text", "")
         updated_text = (
-            f"{message.get('text', '')}\n\n"
+            f"{orig_text}\n\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"❌ <b>REJECTED</b> by human reviewer."
         )
@@ -204,6 +213,67 @@ def handle_telegram_callback(
         return f"Rejected #{failure_id}"
 
     return "Unknown action."
+
+
+def send_and_wait_for_approval(
+    failure: dict[str, Any],
+    final: dict[str, Any],
+    diff: str = "",
+    repo_root: Path | None = None,
+    bot_token: str | None = None,
+    chat_id: str | None = None,
+    timeout: int = 120,
+    on_wait_poll: Any = None,
+) -> bool:
+    """Send approval request to Telegram and wait inline for human decision."""
+    import time
+    token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN")
+    cid = chat_id or os.getenv("TELEGRAM_CHAT_ID")
+    root = (repo_root or Path.cwd()).resolve()
+
+    if not token or not cid:
+        logger.warning("Telegram token or chat_id not set.")
+        return False
+
+    failure_id = str(failure.get("id", "1"))
+
+    # 1. Flush any past pending updates
+    try:
+        past = _call_telegram_api("getUpdates", {"offset": -1, "timeout": 0}, token)
+        results = past.get("result", [])
+        offset = results[-1].get("update_id", 0) + 1 if results else 0
+    except Exception:
+        offset = 0
+
+    # 2. Send the interactive message
+    ok = send_approval_request(failure=failure, final=final, diff=diff, bot_token=token, chat_id=cid)
+    if not ok:
+        return False
+
+    # 3. Poll for user decision
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if on_wait_poll:
+            on_wait_poll()
+        try:
+            updates = _call_telegram_api(
+                "getUpdates",
+                {"offset": offset, "timeout": 2, "allowed_updates": ["callback_query"]},
+                token,
+            )
+            for item in updates.get("result", []):
+                offset = max(offset, item.get("update_id", 0) + 1)
+                cb = item.get("callback_query")
+                if cb and cb.get("data", "").endswith(f":{failure_id}"):
+                    action = cb.get("data", "").split(":")[0]
+                    handle_telegram_callback(cb, repo_root=root, bot_token=token, final=final)
+                    return action == "apply"
+        except Exception as exc:
+            logger.debug(f"Polling error: {exc}")
+
+        time.sleep(1)
+
+    return False
 
 
 def listen_for_approvals(
@@ -235,3 +305,4 @@ def listen_for_approvals(
                     logger.info(f"Telegram approval action: {res}")
         except Exception as exc:
             logger.error(f"Error polling Telegram: {exc}")
+
