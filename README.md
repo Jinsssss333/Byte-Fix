@@ -102,6 +102,17 @@ python -m autoremediate.cli fix 1 --apply
 python -m autoremediate.cli fix 1 --pr
 ```
 
+### 5. Sentry Webhook Ingestion
+Auto-Remediate can listen for incoming Sentry crash webhooks:
+
+```bash
+# Start the HTTP webhook server:
+python -m autoremediate.cli serve-webhook --port 8000
+
+# Verify the Sentry pipeline with HMAC signature verification:
+python scripts/verify_sentry.py
+```
+
 ---
 
 ## Model Configuration
@@ -124,7 +135,7 @@ Auto-Remediate supports any OpenAI-compatible API endpoint:
 
 ## Known Limitations
 
-- **Celery Focused**: Current native capture hooks target Celery signals (with planned Sentry webhook adapters for general services).
+- **Celery & Sentry Focused**: Current native capture hooks target Celery signals and Sentry webhook events.
 - **Read-Only Exploration**: Tool calling is restricted to read-only `read_file` and `grep` within the repo root; no write tools exist during the agent phase.
 - **No Live DB State Inspection**: Operates purely on captured frame locals and arguments rather than inspecting live database records.
 - **Subprocess Isolation**: Relies on temporary directories and separate Python processes; full Docker/container isolation is on the roadmap.
@@ -138,7 +149,7 @@ Auto-Remediate supports any OpenAI-compatible API endpoint:
 - [x] 4-stage sandbox verification engine via pytest
 - [x] Rich terminal interface with offline replay support
 - [x] GitHub PR creation and branch management
-- [ ] Sentry APM Webhook ingestion adapter (`autoremediate/sentry.py`)
+- [x] Sentry APM Webhook ingestion adapter (`autoremediate/sentry.py`)
 - [ ] Docker containerized test execution sandbox
 - [ ] Interactive terminal diff review and staging
 

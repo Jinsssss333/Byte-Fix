@@ -158,6 +158,16 @@ def fix(
             console.print(f"[cyan]Loaded replay from {recording_file}[/cyan]")
             for step in trace:
                 console.print(f"  [bold]Step {step.get('step')}[/bold] [{step.get('type')}]: {step.get('detail')} ({step.get('model')})")
+
+            if final.get("kind") == "give_up":
+                reason = final.get("reason", "")
+                evidence = final.get("evidence", [])
+                ev_text = "\n".join(f"- {e}" for e in evidence)
+                content = f"[bold]Reason:[/bold] {reason}\n\n[bold]Evidence:[/bold]\n{ev_text}"
+                console.print(Panel(content, title="[bold yellow]COULD NOT REPRODUCE[/bold yellow]", border_style="yellow"))
+                raise typer.Exit(code=1)
+        except typer.Exit:
+            raise
         except Exception as exc:
             console.print(f"[bold red]Error reading recording: {exc}[/bold red]")
             raise typer.Exit(code=1)

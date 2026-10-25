@@ -71,3 +71,55 @@ def test_sentry_webhook_http_server(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_sentry_webhook_signature_verification(tmp_path):
+    import hmac
+    import hashlib
+
+    fixture_path = Path("tests/fixtures/sentry_event.json")
+    payload_bytes = fixture_path.read_bytes()
+    secret = "secret-token-xyz"
+
+    handler_cls = create_sentry_webhook_handler(failures_dir=tmp_path, secret=secret)
+    server = HTTPServer(("127.0.0.1", 0), handler_cls)
+    port = server.server_address[1]
+
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        url = f"http://127.0.0.1:{port}/webhook/sentry"
+
+        # 1. Valid signature
+        valid_sig = hmac.new(secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
+        req_valid = urllib.request.Request(
+            url,
+            data=payload_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "sentry-hook-signature": valid_sig,
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req_valid, timeout=5) as resp:
+            assert resp.status == 200
+
+        # 2. Invalid signature
+        req_invalid = urllib.request.Request(
+            url,
+            data=payload_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "sentry-hook-signature": "bad-signature",
+            },
+            method="POST",
+        )
+        try:
+            urllib.request.urlopen(req_invalid, timeout=5)
+            assert False, "Expected HTTP 401 error"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 401
+    finally:
+        server.shutdown()
+        server.server_close()

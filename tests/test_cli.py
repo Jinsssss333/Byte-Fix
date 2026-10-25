@@ -193,3 +193,23 @@ def test_cli_pr_graceful_on_gh_missing(tmp_path, monkeypatch):
     finally:
         if repro_file.exists():
             repro_file.unlink()
+
+
+def test_cli_serve_webhook_command(monkeypatch):
+    class FakeServer:
+        def __init__(self, addr, handler):
+            self.addr = addr
+            self.handler = handler
+
+        def serve_forever(self):
+            raise KeyboardInterrupt()
+
+        def server_close(self):
+            pass
+
+    monkeypatch.setattr("http.server.HTTPServer", FakeServer)
+    res = runner.invoke(app, ["serve-webhook", "--port", "9999"])
+    assert res.exit_code == 0
+    assert "9999" in res.output
+    assert "Webhook server stopped" in res.output
+

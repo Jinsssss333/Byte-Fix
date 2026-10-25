@@ -119,16 +119,45 @@ def normalize_sentry_event(event_payload: dict[str, Any], failures_dir: Path | s
     return target_file
 
 
+import hmac
+import hashlib
+
+
+def validate_sentry_signature(body: bytes, signature: str | None, secret: str | None) -> bool:
+    """Validate Sentry webhook signature using HMAC-SHA256."""
+    if not secret:
+        return True
+    if not signature:
+        return False
+    expected = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
 def create_sentry_webhook_handler(
     failures_dir: Path | str | None = None,
     on_event_callback: Callable[[str], None] | None = None,
+    secret: str | None = None,
 ):
     """Create an HTTP request handler class to ingest Sentry webhooks."""
+    webhook_secret = secret or os.getenv("SENTRY_WEBHOOK_SECRET")
+
     class SentryHandler(BaseHTTPRequestHandler):
         def do_POST(self):
             content_len = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_len).decode("utf-8")
+            raw_body = self.rfile.read(content_len)
+
+            # Validate signature if secret configured
+            sig_header = self.headers.get("sentry-hook-signature")
+            if webhook_secret and not validate_sentry_signature(raw_body, sig_header, webhook_secret):
+                self.send_response(401)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                resp = json.dumps({"status": "error", "message": "Invalid webhook signature"})
+                self.wfile.write(resp.encode("utf-8"))
+                return
+
             try:
+                body = raw_body.decode("utf-8")
                 payload = json.loads(body)
                 saved_path = normalize_sentry_event(payload, failures_dir=failures_dir)
                 failure_id = saved_path.stem

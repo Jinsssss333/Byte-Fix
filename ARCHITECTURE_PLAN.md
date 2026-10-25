@@ -162,23 +162,54 @@ The single standard interface connecting hooks, Sentry, agent, and verifier:
 
 | Task | Title | Description | Status |
 |---|---|---|---|
-| **T0** | **Environment & Repo Align** | Move kit files to repo root, initialize `.venv`, install `requirements.txt`, configure `.env`. | `Pending` |
-| **T1** | **Model Gate Script** | Build `scripts/model_check.py` to verify LLM produces valid `<final>` tags. | `Pending` |
-| **T2** | **Capture Hook** | Implement `autoremediate/hook.py` (PII/secret redaction, Celery listener, `failures/<id>.json` output). | `Pending` |
-| **T3** | **Sandboxed Tools** | Implement `autoremediate/tools.py` (`read_file`, `grep` with path safety). | `Pending` |
-| **T4** | **Verification Engine** | Implement `autoremediate/verify.py` (temp sandbox, 4-stage pytest verification, unified diff). | `Pending` |
-| **T5** | **LLM Client** | Implement `autoremediate/llm.py` (OpenAI-compatible client with automatic fallback). | `Pending` |
-| **T6** | **Agent Loop** | Implement `autoremediate/agent.py` (`parse_action`, message builder, 8-turn convergence loop). | `Pending` |
-| **T7** | **Rich CLI** | Implement `autoremediate/cli.py` (`list`, `fix`, `--replay`, `--apply`, `--pr`, projector-ready Rich panels). | `Pending` |
-| **T8** | **Replay & PR Flow** | Offline replay verification without LLM, graceful git/gh degradation. | `Pending` |
-| **T9** | **Docs & Packaging** | Complete `README.md`, `pyproject.toml`, DigitalOcean GPU vLLM guide. | `Pending` |
-| **T10** | **Stretch / Generalization** | Add tests for Decimal serialization bug and flaky API restraint. | `Pending` |
-| **EXT-1** | **Sentry Webhook Adapter** | Add `autoremediate/sentry.py` (normalizer + lightweight webhook listener + fixture test). | `Planned` |
+| **T0** | **Environment & Repo Align** | Move kit files to repo root, initialize `.venv`, install `requirements.txt`, configure `.env`. | `Completed` |
+| **T1** | **Model Gate Script** | Build `scripts/model_check.py` to verify LLM produces valid `<final>` tags. | `Completed` |
+| **T2** | **Capture Hook** | Implement `autoremediate/hook.py` (PII/secret redaction, Celery listener, `failures/<id>.json` output). | `Completed` |
+| **T3** | **Sandboxed Tools** | Implement `autoremediate/tools.py` (`read_file`, `grep` with path safety). | `Completed` |
+| **T4** | **Verification Engine** | Implement `autoremediate/verify.py` (temp sandbox, 4-stage pytest verification, unified diff). | `Completed` |
+| **T5** | **LLM Client** | Implement `autoremediate/llm.py` (OpenAI-compatible client with automatic fallback). | `Completed` |
+| **T6** | **Agent Loop** | Implement `autoremediate/agent.py` (`parse_action`, message builder, 8-turn convergence loop). | `Completed` |
+| **T7** | **Rich CLI** | Implement `autoremediate/cli.py` (`list`, `fix`, `--replay`, `--apply`, `--pr`, projector-ready Rich panels). | `Completed` |
+| **T8** | **Replay & PR Flow** | Offline replay verification without LLM, graceful git/gh degradation. | `Completed` |
+| **T9** | **Docs & Packaging** | Complete `README.md`, `pyproject.toml`, DigitalOcean GPU vLLM guide. | `Completed` |
+| **T10** | **Stretch / Generalization** | Add tests for Decimal serialization bug and flaky API restraint. | `Completed` |
+| **EXT-1** | **Sentry Webhook Adapter** | Add `autoremediate/sentry.py` (normalizer + HMAC verification + webhook listener + fixture test). | `Completed` |
 
 ---
 
-## 6. How to Use this Document for Context Matching
+## 6. Production Setup & Running Sentry Ingestion
 
-1. **Before any prompt or code change**: Reference the specific task number (e.g., T2, T4) and the signatures in [SPEC.md](file:///home/sub-zero/Documents/projects/hacktoberfest_cittic/auto-remediate-kit/kit/SPEC.md).
-2. **Never deviate from the schema**: All adapters (Celery, Sentry, or custom logs) must output to the exact `failures/<id>.json` schema.
-3. **Always run acceptance commands**: Each task must pass its specific offline pytest acceptance suite before committing or advancing.
+### Step 1: Start the Sentry Webhook Listener
+Launch the built-in HTTP webhook daemon:
+
+```bash
+autoremediate serve-webhook --host 0.0.0.0 --port 8000
+```
+
+### Step 2: Configure Webhook in Sentry
+1. In your Sentry project settings, go to **Integrations** or **Developer Settings** > **Internal Integrations**.
+2. Create an integration and enable **Webhooks**.
+3. Under **Webhook URL**, specify your server URL (e.g., `https://your-domain.com/webhook/sentry`).
+4. Copy the **Client Secret** and add it to your `.env`:
+   ```env
+   SENTRY_WEBHOOK_SECRET=your_sentry_client_secret
+   ```
+5. Subscribe to **Issue Alerts** / **Error Events**.
+
+### Step 3: Automated Fix & Review
+When Sentry fires a webhook event, Auto-Remediate:
+1. Validates the `sentry-hook-signature` HMAC-SHA256 header.
+2. Normalizes the stack trace and frames into `failures/<id>.json`.
+3. Notifies the developer or runs:
+   ```bash
+   autoremediate fix <id> --pr
+   ```
+4. Executes the 4-stage sandbox verification before creating a branch and PR.
+
+---
+
+## 7. Context Matching & Grounding Guidelines
+
+1. **Schema Invariance**: All external adapters (Celery, Sentry, Datadog) must strictly map into the `failures/<id>.json` specification.
+2. **Code-Driven Truth**: The LLM's suggested code is never trusted directly; `verify.py` acts as the impartial arbiter.
+3. **Pristine Reference**: The reference starter kit (`auto-remediate-kit/`) remains untouched for baseline parity.
