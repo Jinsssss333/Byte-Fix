@@ -8,7 +8,7 @@ from .celery_app import app
 @app.task(name="demo_app.tasks.send_receipt")
 def send_receipt(order: dict) -> str:
     """Build a receipt string for an order."""
-    email = order["customer"]["email"].lower()
+    email = (order["customer"]["email"] or "").lower()
     total = sum(item["price"] * item["qty"] for item in order["items"])
     return f"Receipt for {email}: ${total:.2f} (order {order['id']})"
 

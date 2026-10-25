@@ -1,8 +1,0 @@
-.env
-__pycache__/
-*.pyc
-.pytest_cache/
-.venv/
-failures/*.json
-recordings/*.json
-!tests/fixtures/*.json

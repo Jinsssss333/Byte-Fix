@@ -1,9 +1,0 @@
-# Install with: pip install -r requirements.txt
-# After the first successful install run `pip freeze > requirements.lock` and commit it.
-celery[redis]
-redis
-typer
-rich
-openai
-python-dotenv
-pytest

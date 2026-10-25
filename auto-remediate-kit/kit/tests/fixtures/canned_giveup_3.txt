@@ -1,8 +1,0 @@
-<give_up>
-<reason>The failure is a TimeoutError from an external exchange-rate API. It depends on network conditions and cannot be reproduced with local code and the captured arguments. Any patch would be speculative.</reason>
-<evidence>
-- Exception type is TimeoutError raised in _fetch_rate, which stands in for a third-party API call
-- Captured args (120.0, "EUR") are valid, so no data-shape bug is visible
-- Suggest adding retry with backoff and a timeout policy, to be decided by a human
-</evidence>
-</give_up>
