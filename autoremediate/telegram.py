@@ -53,19 +53,50 @@ def send_approval_request(
     root_cause = final.get("root_cause", "No root cause provided.")
     confidence = final.get("confidence", "unknown")
 
+    import html
+
     # Format truncated diff
     diff_snippet = diff[:1500] if diff else "No diff available."
     if len(diff) > 1500:
         diff_snippet += "\n... [diff truncated]"
 
+    # Extract old error line from innermost frame
+    frames = failure.get("frames", [])
+    last_frame = frames[-1] if frames else {}
+    err_file = last_frame.get("file", "")
+    err_line = last_frame.get("line", "")
+    err_code = last_frame.get("code", "").strip()
+
+    # Extract replaced lines (-) and added lines (+) from diff
+    replaced_lines = []
+    added_lines = []
+    if diff:
+        for line in diff.splitlines():
+            if line.startswith("-") and not line.startswith("---"):
+                replaced_lines.append(line[1:].strip())
+            elif line.startswith("+") and not line.startswith("+++"):
+                added_lines.append(line[1:].strip())
+
+    old_code_display = html.escape(err_code or ("\n".join(replaced_lines) if replaced_lines else "N/A"))
+    new_code_display = html.escape("\n".join(added_lines) if added_lines else "See patch below")
+    diff_escaped = html.escape(diff_snippet)
+
+    loc_str = f" in <code>{err_file}:{err_line}</code>" if err_file else ""
+
     text = (
-        f"🚨 <b>Auto-Remediate Approval Request: #{failure_id}</b>\n\n"
-        f"<b>Task:</b> <code>{task_name}</code>\n"
+        f"🚨 <b>Auto-Remediate Approval: #{failure_id}</b>\n\n"
+        f"<b>Task:</b> <code>{task_name}</code>{loc_str}\n"
         f"<b>Error:</b> <code>{exc_type}: {exc_msg}</code>\n"
         f"<b>Confidence:</b> {confidence.upper()}\n\n"
-        f"<b>🔍 Root Cause:</b>\n{root_cause}\n\n"
-        f"<b>📝 Proposed Patch:</b>\n<pre>{diff_snippet}</pre>\n\n"
-        f"<i>Review the verified patch below. Tap Approve to apply it to the codebase.</i>"
+        f"🔴 <b>Old (Crashing Code Line):</b>\n"
+        f"<pre>{old_code_display}</pre>\n\n"
+        f"🟢 <b>New (Patched Code Line):</b>\n"
+        f"<pre>{new_code_display}</pre>\n\n"
+        f"🔍 <b>Root Cause:</b>\n"
+        f"{html.escape(root_cause)}\n\n"
+        f"📝 <b>Unified Diff:</b>\n"
+        f"<pre>{diff_escaped}</pre>\n\n"
+        f"<i>Review the fix above. Tap <b>Approve</b> to apply it to your files.</i>"
     )
 
     reply_markup = {
