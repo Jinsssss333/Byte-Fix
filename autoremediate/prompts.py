@@ -38,7 +38,7 @@ COMPLETE new contents of the file
 </give_up>
 
 Rules:
-1. The reproducer must import from the package (for example: from demo_app.tasks import send_receipt) and call the task function directly with .run(...) using the smallest payload from the captured arguments. It must FAIL with the same exception type as the captured failure before your patch, and PASS after it.
+1. The reproducer must import from the package (for example: from demo_app.tasks import send_receipt) and call the task function directly with .run(...) using the smallest payload from the captured arguments, and assert the expected valid return value. Do NOT use pytest.raises(); call the task directly so it crashes with the unhandled exception before your patch, and passes cleanly after your patch.
 2. Make the smallest change that fixes the root cause. Keep all other behavior identical so existing tests keep passing. Never edit files inside tests directories. Never add dependencies.
 3. patched_file must contain the COMPLETE file, not a diff and not a snippet. You may include more than one patched_file block.
 4. If the failure depends on external systems (network, third-party API, timing, load) and cannot be reproduced with local code and the captured arguments, reply with give_up. Never invent a speculative patch.
